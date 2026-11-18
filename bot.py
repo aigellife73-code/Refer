@@ -1,8 +1,6 @@
-import os
+import logging
 import random
 import string
-import threading
-from flask import Flask
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import (
     ApplicationBuilder,
@@ -12,21 +10,14 @@ from telegram.ext import (
 )
 import requests
 
+# Enable logging
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    level=logging.INFO,
+)
+
 TELEGRAM_BOT_TOKEN = "9019675422:AAHczIEp7XDWvMtrmbrVAdrSGRHizWGMo7E"
 REFER_OPTIONS = [1, 3, 5, 10, 20, 50]
-
-# Flask app to satisfy Render's web service port check
-app = Flask(__name__)
-
-
-@app.route("/")
-def home():
-  return "Bot is running successfully!"
-
-
-def run_flask():
-  port = int(os.environ.get("PORT", 10000))
-  app.run(host="0.0.0.0", port=port)
 
 
 def generate_random_credentials():
@@ -102,16 +93,10 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 def main():
-  # Start Flask server in a separate thread so Render port check passes
-  flask_thread = threading.Thread(target=run_flask)
-  flask_thread.daemon = True
-  flask_thread.start()
-
-  # Start Telegram Bot
   application = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
   application.add_handler(CommandHandler("start", start))
   application.add_handler(CallbackQueryHandler(button_handler))
-  print("Bot and Web Server are running...")
+  print("Bot is running...")
   application.run_polling()
 
 
