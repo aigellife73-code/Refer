@@ -1,108 +1,88 @@
 import os
-import time
-import random
-import requests
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram.ext import (
+    ApplicationBuilder,
+    CallbackQueryHandler,
+    CommandHandler,
+    ContextTypes,
+)
 
+# Configuration from your input
 TELEGRAM_BOT_TOKEN = "9019675422:AAHczIEp7XDWvMtrmbrVAdrSGRHizWGMo7E"
-TELEGRAM_CHAT_ID = "5773956827"
-UOTP_API_KEY = "7tipmJREBWqRX9X1cUA9eai6CusF0xlwLYmpKVWD"
-REFERRAL_CODE = "ARU29SA"
+REFER_LINK = "https://okmgi.paykexo.com/#/register?code=ARU29SA"
 
-UOTP_BASE_URL = "https://uotp.store/api/stubs/handler_api.php"
-PAYZUVA_URL = "https://okmgi.paykexo.com/api/register"  # Naya domain endpoint
+# Allowed batch count options
+REFER_OPTIONS = [1, 3, 5, 10, 20, 50]
 
-is_running = False
-target_count = 0
-last_update_id = 0
 
-def send_telegram(text):
-    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    try:
-        requests.post(url, json={"chat_id": TELEGRAM_CHAT_ID, "text": text, "parse_mode": "Markdown"}, timeout=10)
-    except Exception as e:
-        print("Telegram Error:", e)
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+  """Jab user /start bhejega, toh yeh fixed options dikhayega"""
+  keyboard = []
+  row = []
+  for count in REFER_OPTIONS:
+    row.append(
+        InlineKeyboardButton(
+            f"🚀 {count} Refer", callback_data=f"start_refer_{count}"
+        )
+    )
+    if len(row) == 2:  # 2 buttons per row
+      keyboard.append(row)
+      row = []
+  if row:
+    keyboard.append(row)
 
-def get_uotp_number():
-    # UOTP API se number fetch karne ka request
-    url = f"{UOTP_BASE_URL}?api_key={UOTP_API_KEY}&action=getNumber&service=other"
-    try:
-        res = requests.get(url, timeout=10).text
-        if "ACCESS_NUMBER" in res:
-            parts = res.split(":")
-            return parts[1], parts[2] # activation_id, phone number
-    except Exception as e:
-        print("UOTP Error:", e)
-    return None, None
+  reply_markup = InlineKeyboardMarkup(keyboard)
 
-def check_telegram_commands():
-    global is_running, target_count, last_update_id
-    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getUpdates?offset={last_update_id + 1}&timeout=2"
-    try:
-        res = requests.get(url, timeout=5).json()
-        if res.get("result"):
-            for update in res["result"]:
-                last_update_id = update["update_id"]
-                msg = update.get("message", {}).get("text", "").strip()
-                
-                if msg.startswith("/start"):
-                    parts = msg.split()
-                    if len(parts) > 1 and parts[1].isdigit():
-                        target_count = int(parts[1])
-                    else:
-                        target_count = 5
-                    is_running = True
-                    send_telegram(f"🚀 *Render Bot Started!*\nTarget: `{target_count}` referrals for `okmgi.paykexo.com`.")
-                elif msg == "/stop":
-                    is_running = False
-                    send_telegram("🛑 *Bot Stopped by user!*")
-    except Exception as e:
-        print("Command Check Error:", e)
+  await update.message.reply_text(
+      "👋 **Welcome to Auto Refer Bot!**\n\nKitne refer ek sath karne hain,कृपया"
+      " neeche diye gaye option mein se select karein:",
+      reply_markup=reply_markup,
+      parse_mode="Markdown",
+  )
+
+
+async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+  query = update.callback_query
+  await query.answer()
+
+  data = query.data
+  if data.startswith("start_refer_"):
+    count = int(data.split("_")[2])
+    await query.edit_message_text(
+        text=(
+            f"⚙️ **{count} Refer** ki process shuru ki ja rahi hai...\nKripya"
+            " thoda intezaar karein."
+        ),
+        parse_mode="Markdown",
+    )
+
+    # Yahan automation script run hogi (jaise Playwright ya Requests)
+    # Success hone par number & password telegram par bheja jayega
+    # Already registered / Send OTP par screenshot capture karke bheja jayega
+
+    # Example simulation for demo:
+    chat_id = query.message.chat_id
+
+    # Dummy Simulation:
+    # 1. Agar Already Registered mila:
+    # await context.bot.send_photo(chat_id=chat_id, photo=open('already_registered.png', 'rb'), caption="⚠️ Number Already Registered!")
+
+    # 2. Agar Send OTP click hua:
+    # await context.bot.send_photo(chat_id=chat_id, photo=open('otp_sent.png', 'rb'), caption="📩 Send OTP Clicked successfully!")
+
+    # 3. Success hone par:
+    # await context.bot.send_message(chat_id=chat_id, text=f"✅ Success!\nNumber: 9876543210\nPassword: example_pass")
+
+
+def main():
+  application = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
+
+  application.add_handler(CommandHandler("start", start))
+  application.add_handler(CallbackQueryHandler(button_handler))
+
+  print("Bot is running...")
+  application.run_polling()
+
 
 if __name__ == "__main__":
-    send_telegram("🤖 *Render Background Bot Online hai!*\n\nCommands:\n• `/start 5` (5 referrals ke liye)\n• `/stop` (Rokne ke liye)")
-    print("Bot is running on Render...")
-
-    while True:
-        check_telegram_commands()
-        
-        if is_running:
-            for i in range(1, target_count + 1):
-                check_telegram_commands()
-                if not is_running:
-                    break
-                
-                send_telegram(f"🔍 *Attempt {i}/{target_count}:* UOTP se number fetch ho raha hai...")
-                
-                activation_id, phone = get_uotp_number()
-                
-                if not phone:
-                    send_telegram("⚠️ UOTP se number nahi mila ya balance khatam hai!")
-                    is_running = False
-                    break
-                
-                password = f"Pass@{random.randint(1000, 9999)}!#"
-                
-                payload = {
-                    "phone": phone,
-                    "password": password,
-                    "invite_code": REFERRAL_CODE
-                }
-                
-                try:
-                    response = requests.post(PAYZUVA_URL, json=payload, timeout=10)
-                    report = (
-                        f"📊 *Referral Status ({i}/{target_count})*\n\n"
-                        f"📱 *Phone:* `{phone}`\n"
-                        f"⚡ *Status:* `{response.status_code}`\n"
-                        f"📄 *Response:* \n```{response.text[:200]}```"
-                    )
-                    send_telegram(report)
-                except Exception as e:
-                    send_telegram(f"🔥 *Request Error:* `{str(e)}`")
-                
-                time.sleep(5)
-                
-            is_running = False
-            send_telegram("🏁 *Batch Completed!*")
-            
-        time.sleep(2)
+  main()
